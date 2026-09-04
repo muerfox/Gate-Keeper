@@ -1,0 +1,21 @@
+{
+  "name": "@gatekeeper/risk-engine",
+  "version": "0.1.0",
+  "description": "Gate Keeper server-side risk scoring and behavioral consistency analysis.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@gatekeeper/shared": "0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.4"
+  }
+}

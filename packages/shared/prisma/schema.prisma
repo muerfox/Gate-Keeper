@@ -1,0 +1,357 @@
+// Gate Keeper database schema.
+//
+// Design notes:
+// - All primary keys are randomly generated (cuid2/uuid), never sequential integers,
+//   to avoid leaking volume/enumeration information through IDs exposed in APIs.
+// - High-volume, hot-path tables (challenges, verification_attempts, consumed_tokens,
+//   risk_events) are indexed for the query patterns the API and dashboard actually run:
+//   lookups by primary key, and time-windowed scans by (site_id, created_at).
+// - Nothing here stores raw passwords, raw secret keys, or unbounded behavioral payloads —
+//   see docs/PRIVACY.md for the retention and minimization policy this schema enforces.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy: Sites, Domains, Keys
+// ---------------------------------------------------------------------------
+
+model Site {
+  id          String   @id @default(cuid())
+  name        String
+  environment Environment @default(PRODUCTION)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  archivedAt  DateTime? @map("archived_at")
+
+  // Per-site policy configuration (thresholds, fail-open/closed, privacy toggles).
+  config      SiteConfig?
+
+  domains         Domain[]
+  apiKeys         ApiKey[]
+  challenges      Challenge[]
+  attempts        VerificationAttempt[]
+  riskEvents      RiskEvent[]
+  securityEvents  SecurityEvent[]
+
+  @@map("sites")
+}
+
+model Domain {
+  id        String   @id @default(cuid())
+  siteId    String   @map("site_id")
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  hostname  String   // e.g. "example.com" — exact match, no wildcard by default
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([siteId, hostname])
+  @@index([hostname])
+  @@map("domains")
+}
+
+enum Environment {
+  DEVELOPMENT
+  PRODUCTION
+}
+
+enum KeyType {
+  PUBLIC_SITE_KEY
+  SECRET_SERVER_KEY
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  siteId      String   @map("site_id")
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  type        KeyType
+  environment Environment @default(PRODUCTION)
+
+  // The key value itself is NEVER stored in plaintext (see threat model §4.7).
+  // We store a public prefix for display/lookup ("GK_live_ab12...") and a hash
+  // of the full secret for verification, plus the signing key id used to mint
+  // tokens/challenges under this site (for public keys) or to authenticate
+  // server calls (for secret keys).
+  keyPrefix   String   @map("key_prefix")
+  keyHash     String   @map("key_hash") // hash of the secret material (secret keys only)
+  publicValue String?  @map("public_value") // full value, only for PUBLIC_SITE_KEY (safe to expose)
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  rotatedAt   DateTime? @map("rotated_at")
+  revokedAt   DateTime? @map("revoked_at")
+
+  @@index([siteId, type])
+  @@index([keyPrefix])
+  @@map("api_keys")
+}
+
+model SiteConfig {
+  siteId                  String   @id @map("site_id")
+  site                    Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  // Risk decision thresholds (defaults documented in docs/ARCHITECTURE.md).
+  lowRiskAutoAllow        Boolean  @default(true) @map("low_risk_auto_allow")
+  mediumChallengeType     String   @default("adaptive") @map("medium_challenge_type")
+  highChallengeType       String   @default("adaptive_hard") @map("high_challenge_type")
+  criticalAction          String   @default("block") @map("critical_action") // block | throttle
+
+  // Failure-mode policy (docs/ARCHITECTURE.md §Failure Modes)
+  redisFailurePolicy      String   @default("fail_closed") @map("redis_failure_policy")
+  dbFailurePolicy         String   @default("fail_closed") @map("db_failure_policy")
+
+  // Privacy toggles (docs/PRIVACY.md)
+  ipProcessingEnabled     Boolean  @default(false) @map("ip_processing_enabled")
+  behavioralTelemetryTTLSeconds Int @default(604800) @map("behavioral_telemetry_ttl_seconds") // 7d
+  analyticsEnabled        Boolean  @default(true) @map("analytics_enabled")
+
+  computationalChallengesEnabled Boolean @default(true) @map("computational_challenges_enabled")
+
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@map("site_configs")
+}
+
+// ---------------------------------------------------------------------------
+// Challenges
+// ---------------------------------------------------------------------------
+
+enum ChallengeType {
+  VISUAL_OBJECT_SELECTION
+  IMAGE_CLASSIFICATION
+  SPATIAL_REASONING
+  SEQUENCE_RECOGNITION
+  DYNAMIC_INTERACTION
+  DRAG_DROP
+  ROTATION
+  PATTERN_RECOGNITION
+  PROOF_OF_WORK
+  CRYPTOGRAPHIC_PROOF
+  ACCESSIBLE_ALTERNATIVE
+}
+
+enum ChallengeState {
+  ISSUED
+  CONSUMED
+  EXPIRED
+  FAILED
+}
+
+model Challenge {
+  id           String         @id // Gate Keeper-generated random ID, not a DB default,
+                                    // so the same value used in the signed payload is the PK.
+  siteId       String         @map("site_id")
+  site         Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  action       String
+  type         ChallengeType
+  difficulty   Int            @default(1)
+  nonce        String         @unique
+  state        ChallengeState @default(ISSUED)
+  issuedAt     DateTime       @default(now()) @map("issued_at")
+  expiresAt    DateTime       @map("expires_at")
+  consumedAt   DateTime?      @map("consumed_at")
+  requestIp    String?        @map("request_ip") // only populated if ipProcessingEnabled
+  attempts     VerificationAttempt[]
+
+  @@index([siteId, issuedAt])
+  @@index([expiresAt])
+  @@map("challenges")
+}
+
+// ---------------------------------------------------------------------------
+// Verification attempts + consumed tokens (replay protection, DB fallback)
+// ---------------------------------------------------------------------------
+
+enum VerificationOutcome {
+  SUCCESS
+  FAILED_ANSWER
+  EXPIRED
+  ALREADY_CONSUMED
+  RISK_BLOCKED
+  RATE_LIMITED
+  INVALID_SIGNATURE
+  SITE_MISMATCH
+  ACTION_MISMATCH
+}
+
+model VerificationAttempt {
+  id          String   @id @default(cuid())
+  challengeId String?  @map("challenge_id")
+  challenge   Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
+  siteId      String   @map("site_id")
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  action      String
+  outcome     VerificationOutcome
+  riskLevel   RiskLevel @default(LOW) @map("risk_level")
+  latencyMs   Int?     @map("latency_ms")
+  requestIp   String?  @map("request_ip")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([siteId, createdAt])
+  @@index([siteId, outcome, createdAt])
+  @@map("verification_attempts")
+}
+
+// Consumed token / challenge nonces: the durable (Postgres) fallback for the
+// Redis-based atomic one-time-use guarantee described in
+// docs/ARCHITECTURE.md §Replay Protection. The unique constraint on `jti` is
+// what makes consumption atomic even without Redis: `INSERT ... ON CONFLICT
+// DO NOTHING` either inserts (this caller wins) or conflicts (already spent).
+model ConsumedToken {
+  jti        String   @id
+  siteId     String   @map("site_id")
+  action     String
+  consumedAt DateTime @default(now()) @map("consumed_at")
+  consumerIp String?  @map("consumer_ip")
+
+  @@index([consumedAt])
+  @@map("consumed_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Risk + Security events
+// ---------------------------------------------------------------------------
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model RiskEvent {
+  id            String    @id @default(cuid())
+  siteId        String    @map("site_id")
+  site          Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  action        String
+  riskLevel     RiskLevel @map("risk_level")
+  score         Float
+  signals       Json      // structured, bounded signal summary — never raw event dumps
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([siteId, createdAt])
+  @@index([siteId, riskLevel, createdAt])
+  @@map("risk_events")
+}
+
+enum SecurityEventType {
+  RATE_LIMIT_EXCEEDED
+  REPLAY_DETECTED
+  INVALID_TOKEN
+  CROSS_SITE_TOKEN
+  CROSS_ACTION_TOKEN
+  DOMAIN_MISMATCH
+  REDIS_DEGRADED
+  DB_DEGRADED
+  ADMIN_LOGIN_FAILURE
+  ADMIN_LOGIN_SUCCESS
+  API_KEY_CREATED
+  API_KEY_ROTATED
+  API_KEY_REVOKED
+  SUSPICIOUS_TRAFFIC
+}
+
+model SecurityEvent {
+  id        String            @id @default(cuid())
+  siteId    String?           @map("site_id")
+  site      Site?             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  type      SecurityEventType
+  severity  RiskLevel         @default(MEDIUM)
+  detail    Json
+  requestIp String?           @map("request_ip")
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  @@index([siteId, createdAt])
+  @@index([type, createdAt])
+  @@map("security_events")
+}
+
+// ---------------------------------------------------------------------------
+// Admin plane
+// ---------------------------------------------------------------------------
+
+enum AdminRole {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+model Administrator {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash") // scrypt, see packages/crypto
+  role          AdminRole @default(VIEWER)
+  totpSecretEnc String?   @map("totp_secret_enc") // encrypted-at-rest, see packages/crypto
+  totpEnabled   Boolean   @default(false) @map("totp_enabled")
+  webauthnCreds WebauthnCredential[]
+  createdAt     DateTime  @default(now()) @map("created_at")
+  lastLoginAt   DateTime? @map("last_login_at")
+  disabledAt    DateTime? @map("disabled_at")
+
+  sessions      AdminSession[]
+  auditLogs     AuditLog[]
+
+  @@map("administrators")
+}
+
+model WebauthnCredential {
+  id              String   @id @default(cuid())
+  adminId         String   @map("admin_id")
+  admin           Administrator @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  credentialId    String   @unique @map("credential_id")
+  publicKey       Bytes    @map("public_key")
+  counter         BigInt   @default(0)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("webauthn_credentials")
+}
+
+model AdminSession {
+  id           String   @id @default(cuid())
+  adminId      String   @map("admin_id")
+  admin        Administrator @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  tokenHash    String   @unique @map("token_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  expiresAt    DateTime @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+
+  @@index([adminId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  adminId     String?  @map("admin_id")
+  admin       Administrator? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  action      String   // e.g. "api_key.create", "site.create", "config.update"
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id")
+  detail      Json?
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([adminId, createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Global configuration (non-site-scoped)
+// ---------------------------------------------------------------------------
+
+model Configuration {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("configuration")
+}

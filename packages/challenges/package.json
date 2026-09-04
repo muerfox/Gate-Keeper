@@ -1,0 +1,22 @@
+{
+  "name": "@gatekeeper/challenges",
+  "version": "0.1.0",
+  "description": "Gate Keeper modular challenge engine: dynamic generation and answer verification for every challenge category.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@gatekeeper/crypto": "0.1.0",
+    "@gatekeeper/shared": "0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.4"
+  }
+}
