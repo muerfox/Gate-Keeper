@@ -38,64 +38,94 @@ docs/               Architecture, threat model, security, privacy,
                     accessibility, offline mode, and API reference
 ```
 
-## Quick start (local development)
+## Quick start
 
-Requires Node.js 20+. This monorepo uses npm workspaces.
+The fastest path to a running instance you can click around in is Option
+A below — it takes about five minutes and only requires Docker and
+Node.js 20+.
 
+### Option A — Docker Compose + demo site (recommended first run)
+
+**1. Clone and install.**
 ```sh
+git clone git@github.com:muerfox/Gate-Keeper.git
+cd Gate-Keeper
 npm install
 npm run build   # builds every package once, in dependency order
 ```
 
-Generate a signing key and an at-rest encryption key (do this once; store
-the output somewhere safe — an env var, a secret manager — never commit
-it):
-
+**2. Generate your keys.** Every Gate Keeper instance needs its own
+signing key and encryption key — there is no default, and the API
+refuses to start without them (that's deliberate; see
+`docs/SECURITY.md`).
 ```sh
 node -e "import('@gatekeeper/crypto').then(async m => {
   console.log('GATEKEEPER_SIGNING_KEY=' + await m.generateEd25519KeyMaterial());
   console.log('GATEKEEPER_ENCRYPTION_KEY=' + m.generateEncryptionKey());
 })"
 ```
+This prints two lines. Keep them — you'll paste them into `.env` next.
 
-### Option A — Docker Compose (Postgres + Redis + API + dashboard)
-
+**3. Configure.**
 ```sh
-cp .env.example .env   # see below for what to fill in
-docker compose up -d
-npm run seed -w @gatekeeper/demo   # provisions a demo site/keys + admin login
-npm run dev -w @gatekeeper/demo    # http://localhost:3100
+cp .env.example .env
+```
+Open `.env` and fill in the two keys you just generated, plus a real
+`POSTGRES_PASSWORD`. Everything else in the file already has a sane
+local-development default.
+
+**4. Start Postgres, Redis, the API, and the dashboard.**
+```sh
+docker compose up -d --build
+docker compose ps   # wait until postgres and redis show "healthy"
 ```
 
-`.env` (referenced by `docker-compose.yml`):
-```
-POSTGRES_PASSWORD=choose-a-real-password
-GATEKEEPER_SIGNING_KEY=<from the command above>
-GATEKEEPER_REDIS_FAILURE_POLICY=fail_closed
+**5. Apply the database schema.** (One-time, and again after any future
+schema change.)
+```sh
+npm run db:generate
+DATABASE_URL=postgres://gatekeeper:<your-POSTGRES_PASSWORD>@localhost:5432/gatekeeper \
+  npx prisma db push --schema packages/shared/prisma/schema.prisma
 ```
 
-Then open:
-- Demo: http://localhost:3100
-- Dashboard: http://localhost:5173 (log in with the credentials the seed
-  script printed)
-- API: http://localhost:8080/healthz
+**6. Seed a demo site and admin account, then run the demo.**
+```sh
+DATABASE_URL=postgres://gatekeeper:<your-POSTGRES_PASSWORD>@localhost:5432/gatekeeper \
+  npm run seed -w @gatekeeper/demo
+npm run dev -w @gatekeeper/demo
+```
+The seed step prints (and saves to `apps/demo/.env.demo`) a demo site
+key, secret key, and dashboard login — you don't need to copy anything
+by hand.
+
+**7. Open it up:**
+| What | URL |
+|---|---|
+| Demo site (widget in action, offline mode, accessibility mode) | http://localhost:3100 |
+| Admin dashboard | http://localhost:5173 (log in with the email/password the seed script printed) |
+| API health check | http://localhost:8080/healthz |
+
+To stop everything: `docker compose down` (add `-v` to also delete the
+database volume and start fresh next time).
 
 ### Option B — Run services individually (no Docker)
 
-You'll need your own Postgres and Redis reachable via `DATABASE_URL` /
-`REDIS_URL`.
+Use this if you already have your own Postgres and Redis, or are
+developing the API/dashboard themselves with hot reload.
 
 ```sh
 export DATABASE_URL=postgres://user:pass@localhost:5432/gatekeeper
 export REDIS_URL=redis://localhost:6379
-export GATEKEEPER_SIGNING_KEY=...
-export GATEKEEPER_ENCRYPTION_KEY=...
+export GATEKEEPER_SIGNING_KEY=...       # from step 2 above
+export GATEKEEPER_ENCRYPTION_KEY=...    # from step 2 above
 
 npm run db:generate
 npx prisma db push --schema packages/shared/prisma/schema.prisma
 
 npm run dev -w @gatekeeper/api         # http://localhost:8080
 npm run dev -w @gatekeeper/dashboard   # http://localhost:5173
+DATABASE_URL=$DATABASE_URL npm run seed -w @gatekeeper/demo
+npm run dev -w @gatekeeper/demo        # http://localhost:3100
 ```
 
 ### Option C — Offline mode (no Postgres, no Redis, no network)
@@ -190,6 +220,20 @@ npx vitest run tests/security     # adversarial tests against the live API
 
 - **"GATEKEEPER_SIGNING_KEY is not set"** — generate one (see Quick Start)
   and export it; Gate Keeper refuses to start with an implicit default.
+- **`prisma db push` fails with a connection error** — Postgres inside
+  Docker Compose takes a few seconds to become ready after `up -d`; run
+  `docker compose ps` and wait for `postgres` to show `healthy` before
+  step 5. Also double check the password in your `DATABASE_URL` matches
+  `POSTGRES_PASSWORD` in `.env`.
+- **`docker compose up` fails with a port already in use** — something
+  else on your machine is already using 5432, 6379, 8080, or 5173. Stop
+  that process, or edit the `ports:` mappings in `docker-compose.yml`.
+- **Seed script can't connect / demo shows no keys** — the seed script
+  needs `DATABASE_URL` set explicitly even when Postgres is running via
+  Docker Compose (it runs on the host, not inside the compose network);
+  see step 6. Re-run it any time — it's idempotent for the demo site.
+- **Want a completely clean slate** — `docker compose down -v` deletes
+  the Postgres volume; then repeat steps 4–6.
 - **Domain mismatch (`403 domain_not_allowed`) on your own site** —
   register your site's exact hostname(s) via the dashboard's Sites page,
   or leave a site's domain list empty during local development only.
