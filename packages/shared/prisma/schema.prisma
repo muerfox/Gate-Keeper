@@ -157,7 +157,6 @@ model Challenge {
   expiresAt    DateTime       @map("expires_at")
   consumedAt   DateTime?      @map("consumed_at")
   requestIp    String?        @map("request_ip") // only populated if ipProcessingEnabled
-  attempts     VerificationAttempt[]
 
   @@index([siteId, issuedAt])
   @@index([expiresAt])
@@ -183,8 +182,12 @@ enum VerificationOutcome {
 
 model VerificationAttempt {
   id          String   @id @default(cuid())
+  // Deliberately NOT a foreign key to Challenge: this is a security audit
+  // log, and the cases we most need to record — a forged, guessed, or
+  // otherwise bogus challengeId presented by an attacker — are exactly the
+  // cases where no matching Challenge row exists. An FK here would silently
+  // drop those attempts (found via tests/security/token-integrity.test.ts).
   challengeId String?  @map("challenge_id")
-  challenge   Challenge? @relation(fields: [challengeId], references: [id], onDelete: SetNull)
   siteId      String   @map("site_id")
   site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   action      String
