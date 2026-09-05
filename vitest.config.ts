@@ -22,8 +22,9 @@ export default defineConfig({
     testTimeout: 20000,
   },
   resolve: {
-    alias: Object.fromEntries(
-      pkgs.map((p) => [`@gatekeeper/${p}`, path.resolve(__dirname, `packages/${p}/src/index.ts`)]),
-    ),
+    alias: [
+      { find: "@gatekeeper/shared/prisma", replacement: path.resolve(__dirname, "packages/shared/generated/client/index.js") },
+      ...pkgs.map((p) => ({ find: `@gatekeeper/${p}`, replacement: path.resolve(__dirname, `packages/${p}/src/index.ts`) })),
+    ],
   },
 });

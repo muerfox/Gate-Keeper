@@ -59,7 +59,11 @@ export type VerificationOutcome =
   | "RATE_LIMITED"
   | "INVALID_SIGNATURE"
   | "SITE_MISMATCH"
-  | "ACTION_MISMATCH";
+  | "ACTION_MISMATCH"
+  /** The submitted answer was correct, but post-answer behavioral risk
+   * analysis (Layer 3/4) requires a harder follow-up challenge before a
+   * token is minted — distinct from RISK_BLOCKED, which is a hard deny. */
+  | "CHALLENGE_REQUIRED";
 
 export interface VerifyResult {
   success: boolean;

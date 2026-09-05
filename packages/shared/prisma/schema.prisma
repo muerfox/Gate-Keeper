@@ -178,6 +178,7 @@ enum VerificationOutcome {
   INVALID_SIGNATURE
   SITE_MISMATCH
   ACTION_MISMATCH
+  CHALLENGE_REQUIRED
 }
 
 model VerificationAttempt {

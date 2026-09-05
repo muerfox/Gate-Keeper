@@ -15,6 +15,9 @@ export const ChallengeRequestSchema = z
     /** Optional hint from the client about a prior session, used only as a
      * weak risk-engine signal — never trusted as an identity claim. */
     sessionHint: z.string().max(128).optional(),
+    /** User-requested accessible challenge path (docs/ACCESSIBILITY.md) —
+     * an explicit opt-in, never inferred from behavior. */
+    accessible: z.boolean().optional(),
   })
   .strict();
 export type ChallengeRequest = z.infer<typeof ChallengeRequestSchema>;
