@@ -1,0 +1,392 @@
+openapi: 3.0.3
+info:
+  title: Gate Keeper API
+  description: >
+    A smarter gate between humans and automated abuse.
+    See docs/API.md for narrative documentation and docs/THREAT_MODEL.md
+    for the security model these endpoints implement.
+  version: "1.0.0"
+  license:
+    name: UNLICENSED
+servers:
+  - url: http://localhost:8080
+    description: Local self-hosted default (docker-compose.yml)
+
+tags:
+  - name: public
+    description: Called from the browser widget or your backend with a site key.
+  - name: admin
+    description: Requires an admin session token; see docs/API.md.
+
+paths:
+  /api/v1/challenge:
+    post:
+      tags: [public]
+      summary: Issue a new challenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteKey, action]
+              additionalProperties: false
+              properties:
+                siteKey:
+                  type: string
+                  example: gk_pub_AbCdEf123456
+                action:
+                  type: string
+                  pattern: '^[a-zA-Z0-9_.:-]{1,64}$'
+                  example: signup
+                sessionHint:
+                  type: string
+                  maxLength: 128
+                accessible:
+                  type: boolean
+      responses:
+        "200":
+          description: Challenge issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicChallenge"
+        "400":
+          description: Invalid request
+        "401":
+          description: Invalid site key
+        "403":
+          description: Domain not allowed
+        "429":
+          description: Rate limited
+
+  /api/v1/verify:
+    post:
+      tags: [public]
+      summary: >
+        Verify a challenge answer (client-facing form, identified by
+        `challengeId`) OR consume a verification token (server-to-server
+        form, identified by `token` and a `Authorization: Bearer <secret
+        key>` header). See docs/API.md for both request shapes.
+      security:
+        - secretKeyAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/ClientVerifyRequest"
+                - $ref: "#/components/schemas/ServerVerifyRequest"
+      responses:
+        "200":
+          description: >
+            Always 200 on a well-formed request — check `success` and
+            `outcome` in the body, not the HTTP status, for the
+            verification result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyResult"
+        "400":
+          description: Invalid request
+        "401":
+          description: Invalid or missing site/secret key
+        "429":
+          description: Rate limited
+
+  /api/v1/report:
+    post:
+      tags: [public]
+      summary: Report a false positive/negative or observed abuse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteKey, reason]
+              additionalProperties: false
+              properties:
+                siteKey:
+                  type: string
+                reason:
+                  type: string
+                  enum: [false_positive, false_negative, abuse_observed]
+                token:
+                  type: string
+                detail:
+                  type: string
+                  maxLength: 1000
+      responses:
+        "202":
+          description: Accepted
+        "400":
+          description: Invalid request
+        "401":
+          description: Invalid site key
+        "429":
+          description: Rate limited
+
+  /api/v1/admin/login:
+    post:
+      tags: [admin]
+      summary: Administrator login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+                totp: { type: string, minLength: 6, maxLength: 6 }
+      responses:
+        "200":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionToken: { type: string }
+                  expiresAt: { type: integer }
+                  role: { type: string, enum: [OWNER, ADMIN, VIEWER] }
+        "401":
+          description: invalid_credentials or totp_required
+        "429":
+          description: Too many attempts (exponential backoff)
+
+  /api/v1/sites:
+    get:
+      tags: [admin]
+      summary: List sites
+      security: [{ adminSessionAuth: [] }]
+      responses:
+        "200": { description: OK }
+        "401": { description: Unauthorized }
+    post:
+      tags: [admin]
+      summary: Create a site
+      security: [{ adminSessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                domains:
+                  type: array
+                  items: { type: string }
+                environment:
+                  type: string
+                  enum: [DEVELOPMENT, PRODUCTION]
+      responses:
+        "201": { description: Created }
+        "403": { description: Forbidden (requires ADMIN role) }
+
+  /api/v1/site:
+    get:
+      tags: [admin]
+      summary: Get one site's detail
+      security: [{ adminSessionAuth: [] }]
+      parameters:
+        - in: query
+          name: siteId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "404": { description: Not found }
+
+  /api/v1/site/{id}/config:
+    patch:
+      tags: [admin]
+      summary: Update a site's configuration
+      security: [{ adminSessionAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lowRiskAutoAllow: { type: boolean }
+                criticalAction: { type: string, enum: [block, throttle] }
+                redisFailurePolicy: { type: string, enum: [fail_open, fail_closed] }
+                dbFailurePolicy: { type: string, enum: [fail_open, fail_closed] }
+                ipProcessingEnabled: { type: boolean }
+                analyticsEnabled: { type: boolean }
+                computationalChallengesEnabled: { type: boolean }
+      responses:
+        "200": { description: Updated }
+        "403": { description: Forbidden (requires ADMIN role) }
+        "404": { description: Not found }
+
+  /api/v1/keys:
+    post:
+      tags: [admin]
+      summary: Create an API key
+      security: [{ adminSessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteId, type]
+              properties:
+                siteId: { type: string }
+                type: { type: string, enum: [PUBLIC_SITE_KEY, SECRET_SERVER_KEY] }
+                environment: { type: string, enum: [DEVELOPMENT, PRODUCTION] }
+      responses:
+        "201":
+          description: >
+            Created. The `value` field is the only time this key's full
+            value is ever returned.
+        "403": { description: Forbidden (requires ADMIN role) }
+
+  /api/v1/keys/{id}:
+    delete:
+      tags: [admin]
+      summary: Revoke an API key
+      security: [{ adminSessionAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Revoked }
+        "403": { description: Forbidden (requires ADMIN role) }
+        "404": { description: Not found }
+
+  /api/v1/events:
+    get:
+      tags: [admin]
+      summary: List security events
+      security: [{ adminSessionAuth: [] }]
+      parameters:
+        - in: query
+          name: siteId
+          schema: { type: string }
+        - in: query
+          name: type
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: cursor
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+
+  /api/v1/analytics:
+    get:
+      tags: [admin]
+      summary: Aggregated analytics
+      security: [{ adminSessionAuth: [] }]
+      parameters:
+        - in: query
+          name: siteId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: windowHours
+          schema: { type: integer, minimum: 1, maximum: 720, default: 24 }
+      responses:
+        "200": { description: OK }
+
+components:
+  securitySchemes:
+    secretKeyAuth:
+      type: http
+      scheme: bearer
+      description: A Gate Keeper secret server key (never a browser-exposed value).
+    adminSessionAuth:
+      type: http
+      scheme: bearer
+      description: An admin session token from POST /api/v1/admin/login.
+
+  schemas:
+    PublicChallenge:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string }
+        difficulty: { type: integer, minimum: 1, maximum: 5 }
+        siteId: { type: string }
+        action: { type: string }
+        issuedAt: { type: integer }
+        expiresAt: { type: integer }
+        payload: { type: object }
+        signedEnvelope: { type: string }
+
+    ClientVerifyRequest:
+      type: object
+      required: [siteKey, action, challengeId, signedEnvelope, answer]
+      additionalProperties: false
+      properties:
+        siteKey: { type: string }
+        action: { type: string }
+        challengeId: { type: string }
+        signedEnvelope: { type: string }
+        answer: {}
+        events:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            properties:
+              t: { type: number }
+              type: { type: string }
+              x: { type: number }
+              y: { type: number }
+              key: { type: string }
+
+    ServerVerifyRequest:
+      type: object
+      required: [token, action]
+      additionalProperties: false
+      properties:
+        token: { type: string }
+        action: { type: string }
+
+    VerifyResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        outcome:
+          type: string
+          enum:
+            - SUCCESS
+            - FAILED_ANSWER
+            - EXPIRED
+            - ALREADY_CONSUMED
+            - RISK_BLOCKED
+            - RATE_LIMITED
+            - INVALID_SIGNATURE
+            - SITE_MISMATCH
+            - ACTION_MISMATCH
+            - CHALLENGE_REQUIRED
+        riskLevel:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        token:
+          type: string
+          description: Present only when success is true.
+        nextChallenge:
+          allOf:
+            - $ref: "#/components/schemas/PublicChallenge"
+          description: Present only when outcome is CHALLENGE_REQUIRED.
