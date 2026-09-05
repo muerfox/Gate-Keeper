@@ -49,4 +49,31 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: AppContext): void 
 
     return reply.code(201).send(site);
   });
+
+  const UpdateConfigSchema = z
+    .object({
+      lowRiskAutoAllow: z.boolean().optional(),
+      criticalAction: z.enum(["block", "throttle"]).optional(),
+      redisFailurePolicy: z.enum(["fail_open", "fail_closed"]).optional(),
+      dbFailurePolicy: z.enum(["fail_open", "fail_closed"]).optional(),
+      ipProcessingEnabled: z.boolean().optional(),
+      analyticsEnabled: z.boolean().optional(),
+      computationalChallengesEnabled: z.boolean().optional(),
+    })
+    .strict();
+
+  app.patch("/api/v1/site/:id/config", { preHandler: requireAdmin(ctx, "ADMIN") }, async (request, reply) => {
+    const params = z.object({ id: z.string().min(1) }).safeParse(request.params);
+    const parsed = UpdateConfigSchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return reply.code(400).send({ error: "invalid_request" });
+
+    const config = await ctx.db.siteConfig.update({ where: { siteId: params.data.id }, data: parsed.data }).catch(() => null);
+    if (!config) return reply.code(404).send({ error: "not_found" });
+
+    await ctx.db.auditLog.create({
+      data: { adminId: request.admin!.id, action: "site.config.update", targetType: "site", targetId: params.data.id, detail: parsed.data, ipAddress: request.ip },
+    });
+
+    return reply.code(200).send(config);
+  });
 }

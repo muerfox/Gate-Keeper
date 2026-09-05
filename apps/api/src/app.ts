@@ -13,6 +13,7 @@ import { registerAnalyticsRoute } from "./routes/analytics.js";
 import { registerAdminAuthRoutes } from "./routes/admin.js";
 import { registerVerificationAttemptsRoute } from "./routes/verification-attempts.js";
 import { registerChallengesRoute } from "./routes/challenges.js";
+import { registerAuditLogsRoute } from "./routes/audit-logs.js";
 
 export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   const app = Fastify({
@@ -37,6 +38,7 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   registerAdminAuthRoutes(app, ctx);
   registerVerificationAttemptsRoute(app, ctx);
   registerChallengesRoute(app, ctx);
+  registerAuditLogsRoute(app, ctx);
 
   return app;
 }
