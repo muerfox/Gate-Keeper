@@ -5,6 +5,14 @@ import type { AppContext } from "../context.js";
 import { requireAdmin } from "../admin-auth.js";
 
 export function registerSiteRoutes(app: FastifyInstance, ctx: AppContext): void {
+  app.get("/api/v1/sites", { preHandler: requireAdmin(ctx, "VIEWER") }, async (_request, reply) => {
+    const sites = await ctx.db.site.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { domains: true, _count: { select: { apiKeys: true } } },
+    });
+    return reply.code(200).send({ sites });
+  });
+
   app.get("/api/v1/site", { preHandler: requireAdmin(ctx, "VIEWER") }, async (request, reply) => {
     const query = z.object({ siteId: z.string().min(1) }).safeParse(request.query);
     if (!query.success) return reply.code(400).send({ error: "invalid_request" });
