@@ -50,7 +50,13 @@ export function registerAdminAuthRoutes(app: FastifyInstance, ctx: AppContext): 
     if (!passwordOk) return fail("bad_password");
 
     if (admin.totpEnabled) {
-      if (!parsed.data.totp || !admin.totpSecretEnc) return fail("totp_required");
+      // Distinct from "invalid_credentials": the password has already been
+      // verified at this point, so telling the caller a second factor is
+      // needed does not leak anything about email/password guessing (that
+      // path is still covered by the generic failure above + backoff).
+      if (!parsed.data.totp || !admin.totpSecretEnc) {
+        return reply.code(401).send({ error: "totp_required" });
+      }
       const secret = decryptAtRest(admin.totpSecretEnc, ctx.env.GATEKEEPER_ENCRYPTION_KEY);
       const totp = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(secret), digits: 6, period: 30 });
       const delta = totp.validate({ token: parsed.data.totp, window: 1 });
