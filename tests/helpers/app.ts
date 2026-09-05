@@ -7,6 +7,7 @@ import { ChallengeStore } from "../../apps/api/src/challenge-store.js";
 import { FailureTracker } from "../../apps/api/src/failure-tracker.js";
 import { createSecurityEventLogger } from "../../apps/api/src/security-events.js";
 import { createTokenReplayStore } from "../../apps/api/src/token-store.js";
+import { createSiteMetaCache } from "../../apps/api/src/site-meta.js";
 import { createDbClient, type PrismaClient } from "../../apps/api/src/db.js";
 import { buildApp } from "../../apps/api/src/app.js";
 import type { AppContext } from "../../apps/api/src/context.js";
@@ -59,6 +60,7 @@ export async function buildTestApp(): Promise<TestApp> {
     rateLimiter: createDefaultRateLimiter(redis),
     logSecurityEvent,
     failureTracker: new FailureTracker(redis),
+    siteMetaCache: createSiteMetaCache(),
   };
 
   const app = await buildApp(ctx);

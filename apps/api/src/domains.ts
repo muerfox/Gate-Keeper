@@ -1,5 +1,3 @@
-import type { PrismaClient } from "./db.js";
-
 /** Extracts a hostname from an Origin or Referer header. Returns null for
  * anything that doesn't parse as a URL (never throws on attacker input). */
 export function extractHostname(headerValue: string | undefined): string | null {
@@ -18,9 +16,12 @@ export function extractHostname(headerValue: string | undefined): string | null 
  * administrator has explicitly registered (docs/THREAT_MODEL.md §4.3).
  * Exact hostname match only — no wildcard/subdomain inference, since that
  * would silently broaden the trust boundary the administrator configured.
+ *
+ * Pure/sync and takes the hostname list directly (rather than querying the
+ * database itself) so callers can pass a cached list — see site-meta.ts —
+ * instead of a DB round trip on every request.
  */
-export async function isDomainAllowed(db: PrismaClient, siteId: string, hostname: string | null): Promise<boolean> {
+export function isDomainAllowed(registeredHostnames: string[], hostname: string | null): boolean {
   if (!hostname) return false;
-  const match = await db.domain.findFirst({ where: { siteId, hostname } });
-  return match !== null;
+  return registeredHostnames.includes(hostname);
 }

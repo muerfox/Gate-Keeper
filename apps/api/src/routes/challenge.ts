@@ -6,6 +6,7 @@ import { DEFAULT_CHALLENGE_TTL_SECONDS } from "@gatekeeper/shared";
 import type { AppContext } from "../context.js";
 import { resolvePublicSiteKey } from "../keys/site-keys.js";
 import { extractHostname, isDomainAllowed } from "../domains.js";
+import { getSiteMeta } from "../site-meta.js";
 
 export function registerChallengeRoute(app: FastifyInstance, ctx: AppContext): void {
   app.post("/api/v1/challenge", async (request, reply) => {
@@ -38,10 +39,10 @@ export function registerChallengeRoute(app: FastifyInstance, ctx: AppContext): v
       return reply.code(429).send({ error: "rate_limited", rule: rateLimitResult.violatedRule });
     }
 
-    const domainCount = await ctx.db.domain.count({ where: { siteId: resolvedKey.siteId } });
-    if (domainCount > 0) {
+    const siteMeta = await getSiteMeta(ctx.db, ctx.siteMetaCache, resolvedKey.siteId);
+    if (siteMeta.domainHostnames.length > 0) {
       const hostname = extractHostname(request.headers.origin) ?? extractHostname(request.headers.referer);
-      const allowed = await isDomainAllowed(ctx.db, resolvedKey.siteId, hostname);
+      const allowed = isDomainAllowed(siteMeta.domainHostnames, hostname);
       if (!allowed) {
         ctx.logSecurityEvent({
           siteId: resolvedKey.siteId,
@@ -53,8 +54,7 @@ export function registerChallengeRoute(app: FastifyInstance, ctx: AppContext): v
       }
     }
 
-    const config = await ctx.db.siteConfig.findUnique({ where: { siteId: resolvedKey.siteId } });
-    const allowComputational = config?.computationalChallengesEnabled ?? true;
+    const allowComputational = siteMeta.computationalChallengesEnabled;
 
     // Lightweight issuance-time escalation: use the sliding-window counts
     // already computed by the rate limiter as a coarse signal, since no

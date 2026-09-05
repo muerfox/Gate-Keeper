@@ -13,6 +13,7 @@ import type { AppContext } from "../context.js";
 import { resolvePublicSiteKey, resolveSecretServerKey } from "../keys/site-keys.js";
 import { extractHostname, isDomainAllowed } from "../domains.js";
 import { issueVerificationToken, verifyAndConsumeToken } from "../token.js";
+import { getSiteMeta } from "../site-meta.js";
 
 /** Post-answer gating: distinct from risk-engine's general
  * `decideAction` (which picks whether/how hard to challenge BEFORE any
@@ -64,10 +65,10 @@ async function handleClientVerify(app: FastifyInstance, ctx: AppContext, request
     return reply.code(429).send({ error: "rate_limited", rule: rateLimitResult.violatedRule });
   }
 
-  const domainCount = await ctx.db.domain.count({ where: { siteId: resolvedKey.siteId } });
-  if (domainCount > 0) {
+  const siteMeta = await getSiteMeta(ctx.db, ctx.siteMetaCache, resolvedKey.siteId);
+  if (siteMeta.domainHostnames.length > 0) {
     const hostname = extractHostname(request.headers.origin) ?? extractHostname(request.headers.referer);
-    if (!(await isDomainAllowed(ctx.db, resolvedKey.siteId, hostname))) {
+    if (!isDomainAllowed(siteMeta.domainHostnames, hostname)) {
       ctx.logSecurityEvent({ siteId: resolvedKey.siteId, type: "DOMAIN_MISMATCH", detail: { hostname, action }, requestIp: ip });
       return reply.code(403).send({ error: "domain_not_allowed" });
     }

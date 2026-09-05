@@ -69,6 +69,7 @@ export function registerSiteRoutes(app: FastifyInstance, ctx: AppContext): void 
 
     const config = await ctx.db.siteConfig.update({ where: { siteId: params.data.id }, data: parsed.data }).catch(() => null);
     if (!config) return reply.code(404).send({ error: "not_found" });
+    ctx.siteMetaCache.invalidate(params.data.id);
 
     await ctx.db.auditLog.create({
       data: { adminId: request.admin!.id, action: "site.config.update", targetType: "site", targetId: params.data.id, detail: parsed.data, ipAddress: request.ip },

@@ -11,6 +11,8 @@ import { createTokenReplayStore } from "./token-store.js";
 import { createDefaultRateLimiter } from "./rate-limits.js";
 import { ChallengeStore } from "./challenge-store.js";
 import { FailureTracker } from "./failure-tracker.js";
+import { createSiteMetaCache, type SiteMeta } from "./site-meta.js";
+import type { TtlCache } from "./ttl-cache.js";
 
 export interface AppContext {
   env: Env;
@@ -22,6 +24,7 @@ export interface AppContext {
   rateLimiter: CompositeRateLimiter;
   logSecurityEvent: SecurityEventLogger;
   failureTracker: FailureTracker;
+  siteMetaCache: TtlCache<SiteMeta>;
 }
 
 export async function buildContext(env: Env, logger: Logger): Promise<AppContext> {
@@ -41,5 +44,6 @@ export async function buildContext(env: Env, logger: Logger): Promise<AppContext
     rateLimiter: createDefaultRateLimiter(redis),
     logSecurityEvent,
     failureTracker: new FailureTracker(redis),
+    siteMetaCache: createSiteMetaCache(),
   };
 }
