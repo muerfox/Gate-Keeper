@@ -72,6 +72,11 @@ export interface VerifyResult {
   challengeId?: string;
   action?: string;
   siteId?: string;
+  /** Present only on a SUCCESS outcome — the short-lived, signed
+   * verification token the customer's backend must independently verify
+   * (docs/ARCHITECTURE.md — the client-visible token is never itself the
+   * trust decision). */
+  token?: string;
   /** Present only when a harder challenge is required instead of a hard
    * pass/fail (adaptive escalation, docs/ARCHITECTURE.md §Risk Engine). */
   nextChallenge?: PublicChallenge;
