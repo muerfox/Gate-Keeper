@@ -1,0 +1,21 @@
+{
+  "name": "@gatekeeper/captcha-server",
+  "version": "0.1.0",
+  "description": "Gate Keeper backend SDK — server-side token verification against the Gate Keeper API using a secret server key.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@gatekeeper/shared": "0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.4"
+  }
+}

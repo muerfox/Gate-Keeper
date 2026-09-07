@@ -1,0 +1,42 @@
+{
+  "name": "gate-keeper",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Gate Keeper — a smarter gate between humans and automated abuse.",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "vitest run",
+    "test:security": "vitest run tests/security",
+    "test:unit": "vitest run packages",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "prisma generate --schema packages/shared/prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema packages/shared/prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "ioredis-mock": "^8.9.0",
+    "light-my-request": "^6.6.0",
+    "prisma": "^5.22.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  },
+  "allowScripts": {
+    "prisma@5.22.0": true,
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "esbuild@0.27.7": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "@embedded-postgres/linux-x64@18.4.0-beta.17": true
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@gatekeeper/captcha-client",
+  "version": "0.1.0",
+  "description": "Gate Keeper browser SDK — render(), execute(), and the HTML data-attribute widget.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,iife --global-name GateKeeper --dts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@gatekeeper/shared": "0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.4",
+    "jsdom": "^25.0.1"
+  }
+}
