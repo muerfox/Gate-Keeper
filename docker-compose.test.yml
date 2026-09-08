@@ -1,0 +1,78 @@
+version: "3.9"
+
+# A fully separate, disposable stack for smoke-testing a Gate Keeper build
+# end to end. Its own Postgres/Redis on different host ports/volumes from
+# docker-compose.yml, so it's safe to run alongside (or instead of) the
+# main dev stack. Brings up the real API plus a minimal login page at
+# http://127.0.0.1:8000 that is guarded by the real widget and
+# independently re-verified server-side — see docs/TESTING.md.
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gatekeeper
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gatekeeper_test_only}
+      POSTGRES_DB: gatekeeper_test
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - gatekeeper_test_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gatekeeper"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis-test:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api-test:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://gatekeeper:${POSTGRES_PASSWORD:-gatekeeper_test_only}@postgres-test:5432/gatekeeper_test
+      REDIS_URL: redis://redis-test:6379
+      GATEKEEPER_SIGNING_KEY: ${GATEKEEPER_SIGNING_KEY:?generate one — see docs/TESTING.md — and set it in .env.test}
+      GATEKEEPER_ENCRYPTION_KEY: ${GATEKEEPER_ENCRYPTION_KEY:?generate one — see docs/TESTING.md — and set it in .env.test}
+      GATEKEEPER_REDIS_FAILURE_POLICY: fail_closed
+      NODE_ENV: production
+      PORT: "8080"
+    ports:
+      - "127.0.0.1:8081:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  # Applies the DB schema, seeds a throwaway test site, and serves the
+  # login page at http://127.0.0.1:8000 — see apps/test-login/.
+  test-login:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/test-login.Dockerfile
+    depends_on:
+      api-test:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://gatekeeper:${POSTGRES_PASSWORD:-gatekeeper_test_only}@postgres-test:5432/gatekeeper_test
+      GATEKEEPER_API_URL: http://api-test:8080
+      PORT: "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  gatekeeper_test_pg_data:
