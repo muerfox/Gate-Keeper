@@ -202,6 +202,7 @@ if (!result.success) {
 - [`docs/OFFLINE_MODE.md`](docs/OFFLINE_MODE.md) — what offline mode does and does not preserve
 - [`docs/API.md`](docs/API.md) / [`docs/openapi.yaml`](docs/openapi.yaml) — full endpoint reference
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — measured hot-path performance and a fixed bottleneck
+- [`docs/TESTING.md`](docs/TESTING.md) — a separate, disposable Docker stack with a sample login page at http://127.0.0.1:8000 to visually verify a build works end to end
 - [`SECURITY_AUDIT.md`](SECURITY_AUDIT.md) — a penetration-test-style review of this codebase
 
 ## Testing

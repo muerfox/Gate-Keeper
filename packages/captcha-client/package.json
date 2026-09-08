@@ -9,7 +9,7 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm,iife --global-name GateKeeper --dts",
+    "build": "tsup src/index.ts --format esm,iife --global-name GateKeeper --dts && node -e \"require('fs').copyFileSync('dist/index.global.js','dist/gatekeeper.js')\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
