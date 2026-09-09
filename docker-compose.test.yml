@@ -1,7 +1,12 @@
 version: "3.9"
 
 # A fully separate, disposable stack for smoke-testing a Gate Keeper build
-# end to end. Its own Postgres/Redis on different host ports/volumes from
+# end to end — self-configuring, no host Node install and no manual setup
+# step required. Just:
+#
+#   docker compose -f docker-compose.test.yml up -d --build
+#
+# Its own Postgres/Redis on different host ports/volumes from
 # docker-compose.yml, so it's safe to run alongside (or instead of) the
 # main dev stack. Brings up the real API plus a minimal login page at
 # http://127.0.0.1:8000 that is guarded by the real widget and
@@ -33,20 +38,42 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot: generates a throwaway signing key + encryption key entirely
+  # inside the container (using the already-built @gatekeeper/crypto) and
+  # writes them to a shared volume, so api-test can pick them up at start
+  # with no host-side key-generation step. Reuses whatever's already in
+  # the volume from a previous run — see scripts/container-keygen.mjs.
+  keygen:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/test-login.Dockerfile
+    entrypoint: ["node", "scripts/container-keygen.mjs", "/keys/gatekeeper.env"]
+    volumes:
+      - gatekeeper_test_keys:/keys
+
   api-test:
     build:
       context: .
       dockerfile: infrastructure/docker/api.Dockerfile
     depends_on:
+      keygen:
+        condition: service_completed_successfully
       postgres-test:
         condition: service_healthy
       redis-test:
         condition: service_healthy
+    volumes:
+      - gatekeeper_test_keys:/keys:ro
+    # Sources the keys keygen wrote before starting — see the keygen
+    # service comment above. api.Dockerfile's own CMD (plain `node
+    # dist/server.js`) is for the main docker-compose.yml stack, where
+    # keys are provided directly and never auto-generated.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - ". /keys/gatekeeper.env && exec node dist/server.js"
     environment:
       DATABASE_URL: postgres://gatekeeper:${POSTGRES_PASSWORD:-gatekeeper_test_only}@postgres-test:5432/gatekeeper_test
       REDIS_URL: redis://redis-test:6379
-      GATEKEEPER_SIGNING_KEY: ${GATEKEEPER_SIGNING_KEY:?generate one — see docs/TESTING.md — and set it in .env.test}
-      GATEKEEPER_ENCRYPTION_KEY: ${GATEKEEPER_ENCRYPTION_KEY:?generate one — see docs/TESTING.md — and set it in .env.test}
       GATEKEEPER_REDIS_FAILURE_POLICY: fail_closed
       NODE_ENV: production
       PORT: "8080"
@@ -76,3 +103,4 @@ services:
 
 volumes:
   gatekeeper_test_pg_data:
+  gatekeeper_test_keys:
