@@ -1,5 +1,10 @@
 # syntax=docker/dockerfile:1
 FROM node:20-alpine AS build
+# Alpine ships OpenSSL 3 but not the `openssl` CLI Prisma uses to detect
+# it — without this, `prisma generate` can't tell and silently defaults
+# to bundling an engine linked against OpenSSL 1.1, which then fails to
+# load (Alpine hasn't shipped that version in years). See docs/TESTING.md.
+RUN apk add --no-cache openssl
 WORKDIR /repo
 COPY package.json package-lock.json* ./
 COPY apps/api/package.json apps/api/package.json
@@ -18,6 +23,10 @@ RUN npm run build --workspace=@gatekeeper/shared \
   && npm run build --workspace=@gatekeeper/api
 
 FROM node:20-alpine AS runtime
+# Same reason as the build stage: Prisma's runtime engine loader also
+# needs the `openssl` CLI to correctly detect OpenSSL 3, or it defaults
+# to the wrong (1.1) engine and crashes on startup.
+RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /repo /repo
