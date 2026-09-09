@@ -12,6 +12,15 @@
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/client"
+  // "native" covers wherever `prisma generate` itself runs (a dev
+  // machine, CI). linux-musl-openssl-3.0.x is added explicitly because
+  // Alpine-based Docker images (api.Dockerfile, test-login.Dockerfile)
+  // ship OpenSSL 3, and Prisma's own auto-detection for "native" on a
+  // minimal Alpine build stage has been known to guess the older
+  // musl/OpenSSL-1.1 engine instead — which then fails to load at
+  // runtime with "Error loading shared library libssl.so.1.1: No such
+  // file or directory" since Alpine no longer ships that version.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
