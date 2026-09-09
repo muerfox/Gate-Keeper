@@ -18,7 +18,12 @@
     "test:unit": "vitest run packages",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:generate": "prisma generate --schema packages/shared/prisma/schema.prisma",
-    "db:migrate": "prisma migrate dev --schema packages/shared/prisma/schema.prisma"
+    "db:migrate": "prisma migrate dev --schema packages/shared/prisma/schema.prisma",
+    "env:generate": "node scripts/ensure-env.mjs .env .env.example",
+    "smoke:env": "node scripts/ensure-env.mjs .env.test .env.test.example",
+    "smoke:up": "npm run smoke:env && docker compose -f docker-compose.test.yml --env-file .env.test up -d --build",
+    "smoke:down": "docker compose -f docker-compose.test.yml down",
+    "smoke:logs": "docker compose -f docker-compose.test.yml logs -f"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

@@ -15,35 +15,34 @@ suite); it's a fast, visual "did I wire this up correctly" check.
 
 ## Run it
 
-Requires Docker and Docker Compose. From the repo root:
+Requires Docker, Docker Compose, and Node.js 20+ (only to build once and
+to generate keys — nothing in the stack itself depends on your host
+Node). From the repo root:
 
-**1. Generate keys** (skip if you already have some from the main
-Quick Start in `README.md` — reusing them is fine, this is a throwaway
-stack anyway):
+**1. Build once** (needed so key generation in the next step has
+something to import):
 ```sh
-node -e "import('@gatekeeper/crypto').then(async m => {
-  console.log('GATEKEEPER_SIGNING_KEY=' + await m.generateEd25519KeyMaterial());
-  console.log('GATEKEEPER_ENCRYPTION_KEY=' + m.generateEncryptionKey());
-})"
+npm install
+npm run build
 ```
 
-**2. Configure:**
+**2. Bring the stack up:**
 ```sh
-cp .env.test.example .env.test
+npm run smoke:up
 ```
-Paste the two keys from step 1 into `.env.test`.
+This one command does everything: creates `.env.test` from
+`.env.test.example` and fills in `GATEKEEPER_SIGNING_KEY` /
+`GATEKEEPER_ENCRYPTION_KEY` with freshly generated key material if
+they're not already set (`scripts/ensure-env.mjs` — safe to re-run, it
+leaves existing keys alone), then runs
+`docker compose -f docker-compose.test.yml up -d --build`, which starts,
+in order: `postgres-test`, `redis-test`, the real API (`api-test`), and
+`test-login` — which waits for the API to report healthy, applies the
+database schema, seeds one throwaway test site + API key pair, and
+starts serving the login page. First run takes a couple of minutes
+(image builds); after that, seconds.
 
-**3. Start the stack:**
-```sh
-docker compose -f docker-compose.test.yml --env-file .env.test up -d --build
-```
-This builds and starts, in order: `postgres-test`, `redis-test`, the
-real API (`api-test`), and `test-login` — which waits for the API to
-report healthy, applies the database schema, seeds one throwaway test
-site + API key pair, and starts serving the login page. First run takes
-a couple of minutes (image builds); after that, seconds.
-
-**4. Open the login page:**
+**3. Open the login page:**
 
 **http://127.0.0.1:8000**
 
@@ -79,7 +78,7 @@ assuming the platform itself is broken.
 ## Stopping / resetting
 
 ```sh
-docker compose -f docker-compose.test.yml down      # stop, keep data
+npm run smoke:down                                   # stop, keep data
 docker compose -f docker-compose.test.yml down -v    # stop and wipe the test database
 ```
 The test site's API keys are regenerated on every container start (see
@@ -104,11 +103,15 @@ this reflects your current working tree, not a published image.
 
 - **Page says "Not seeded yet"** — the `test-login` container is still
   waiting on `api-test` to become healthy, or is still running its own
-  schema-push/seed step. Check `docker compose -f docker-compose.test.yml logs -f test-login`.
-- **`docker compose up` fails immediately with a message about
-  `GATEKEEPER_SIGNING_KEY`** — you skipped step 1/2, or `.env.test`
-  still has an empty value. Compose refuses to start without it,
-  deliberately (`docs/SECURITY.md`).
+  schema-push/seed step. Check `npm run smoke:logs` (or
+  `docker compose -f docker-compose.test.yml logs -f test-login`).
+- **`npm run smoke:up` fails with "Could not load @gatekeeper/crypto"**
+  — you skipped step 1; run `npm install && npm run build` first, then
+  retry.
+- **`docker compose` itself fails with a message about
+  `GATEKEEPER_SIGNING_KEY`** — `.env.test` has a stale empty value from
+  before `scripts/ensure-env.mjs` existed, or was hand-edited. Delete
+  `.env.test` and re-run `npm run smoke:up` to regenerate it.
 - **Port already in use (5433/6380/8081/8000)** — something else on
   your machine is using it. Stop that process, or edit the `ports:`
   mappings in `docker-compose.test.yml`.

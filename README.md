@@ -54,33 +54,25 @@ npm install
 npm run build   # builds every package once, in dependency order
 ```
 
-**2. Generate your keys.** Every Gate Keeper instance needs its own
-signing key and encryption key — there is no default, and the API
-refuses to start without them (that's deliberate; see
-`docs/SECURITY.md`).
+**2. Configure.** Every Gate Keeper instance needs its own signing key
+and encryption key — there is no default, and the API refuses to start
+without them (that's deliberate; see `docs/SECURITY.md`). This creates
+`.env` and generates both automatically:
 ```sh
-node -e "import('@gatekeeper/crypto').then(async m => {
-  console.log('GATEKEEPER_SIGNING_KEY=' + await m.generateEd25519KeyMaterial());
-  console.log('GATEKEEPER_ENCRYPTION_KEY=' + m.generateEncryptionKey());
-})"
+npm run env:generate
 ```
-This prints two lines. Keep them — you'll paste them into `.env` next.
+Open `.env` afterward and set a real `POSTGRES_PASSWORD` — everything
+else already has a sane local-development default. (Re-running
+`env:generate` later is safe: it only fills in keys that are still
+blank, it never overwrites ones you already have.)
 
-**3. Configure.**
-```sh
-cp .env.example .env
-```
-Open `.env` and fill in the two keys you just generated, plus a real
-`POSTGRES_PASSWORD`. Everything else in the file already has a sane
-local-development default.
-
-**4. Start Postgres, Redis, the API, and the dashboard.**
+**3. Start Postgres, Redis, the API, and the dashboard.**
 ```sh
 docker compose up -d --build
 docker compose ps   # wait until postgres and redis show "healthy"
 ```
 
-**5. Apply the database schema.** (One-time, and again after any future
+**4. Apply the database schema.** (One-time, and again after any future
 schema change.)
 ```sh
 npm run db:generate
@@ -88,7 +80,7 @@ DATABASE_URL=postgres://gatekeeper:<your-POSTGRES_PASSWORD>@localhost:5432/gatek
   npx prisma db push --schema packages/shared/prisma/schema.prisma
 ```
 
-**6. Seed a demo site and admin account, then run the demo.**
+**5. Seed a demo site and admin account, then run the demo.**
 ```sh
 DATABASE_URL=postgres://gatekeeper:<your-POSTGRES_PASSWORD>@localhost:5432/gatekeeper \
   npm run seed -w @gatekeeper/demo
@@ -98,7 +90,7 @@ The seed step prints (and saves to `apps/demo/.env.demo`) a demo site
 key, secret key, and dashboard login — you don't need to copy anything
 by hand.
 
-**7. Open it up:**
+**6. Open it up:**
 | What | URL |
 |---|---|
 | Demo site (widget in action, offline mode, accessibility mode) | http://localhost:3100 |
