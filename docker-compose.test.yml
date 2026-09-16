@@ -1,5 +1,3 @@
-version: "3.9"
-
 # A fully separate, disposable stack for smoke-testing a Gate Keeper build
 # end to end — self-configuring, no host Node install and no manual setup
 # step required. Just:
@@ -79,8 +77,12 @@ services:
       PORT: "8080"
     ports:
       - "127.0.0.1:8081:8080"
+    # Plain Node (guaranteed present, unlike wget/curl on a minimal Alpine
+    # image) hitting 127.0.0.1 explicitly — "localhost" can resolve to
+    # ::1 first in this image, which nothing listens on since Fastify
+    # only binds IPv4.
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/healthz"]
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 5s
       timeout: 5s
       retries: 15

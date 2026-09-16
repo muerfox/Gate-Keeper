@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Local / self-hosted deployment. See docs/OFFLINE_MODE.md for air-gapped
 # setups that omit the shared postgres+redis entirely.
 services:
