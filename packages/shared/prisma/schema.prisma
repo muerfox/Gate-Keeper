@@ -143,6 +143,7 @@ enum ChallengeType {
   PROOF_OF_WORK
   CRYPTOGRAPHIC_PROOF
   ACCESSIBLE_ALTERNATIVE
+  COMMON_SENSE_CHOICE
 }
 
 enum ChallengeState {

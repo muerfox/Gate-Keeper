@@ -11,6 +11,7 @@ import { dynamicInteractionGenerator } from "./generators/dynamic-interaction.js
 import { proofOfWorkGenerator } from "./generators/proof-of-work.js";
 import { cryptographicProofGenerator } from "./generators/cryptographic-proof.js";
 import { accessibleAlternativeGenerator } from "./generators/accessible-alternative.js";
+import { commonSenseChoiceGenerator } from "./generators/common-sense.js";
 import { secureChoice } from "./secure-random.js";
 
 const REGISTRY: Record<ChallengeType, ChallengeGenerator> = {
@@ -25,8 +26,13 @@ const REGISTRY: Record<ChallengeType, ChallengeGenerator> = {
   proof_of_work: proofOfWorkGenerator,
   cryptographic_proof: cryptographicProofGenerator,
   accessible_alternative: accessibleAlternativeGenerator,
+  common_sense_choice: commonSenseChoiceGenerator,
 };
 
+// common_sense_choice appears twice as often as the others: it's the
+// friendliest category (one click, no fine motor/visual discrimination),
+// so weighting it in gives every session — not just ones that requested
+// the accessible pool — an easy option some of the time.
 export const INTERACTIVE_CHALLENGE_TYPES: ChallengeType[] = [
   "visual_object_selection",
   "image_classification",
@@ -35,6 +41,8 @@ export const INTERACTIVE_CHALLENGE_TYPES: ChallengeType[] = [
   "drag_drop",
   "rotation",
   "pattern_recognition",
+  "common_sense_choice",
+  "common_sense_choice",
 ];
 
 export const ACCESSIBLE_CHALLENGE_TYPES: ChallengeType[] = Object.values(REGISTRY)

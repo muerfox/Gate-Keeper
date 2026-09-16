@@ -66,6 +66,8 @@ describe("POST /api/v1/challenge", () => {
     const { siteKey } = await createTestSite(t.db);
     const res = await t.app.inject({ method: "POST", url: "/api/v1/challenge", payload: { siteKey, action: "signup", accessible: true } });
     expect(res.statusCode).toBe(200);
-    expect(["accessible_alternative", "dynamic_interaction", "proof_of_work", "cryptographic_proof"]).toContain(res.json().type);
+    expect(["accessible_alternative", "common_sense_choice", "dynamic_interaction", "proof_of_work", "cryptographic_proof"]).toContain(
+      res.json().type,
+    );
   });
 });

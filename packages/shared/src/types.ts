@@ -11,7 +11,8 @@ export type ChallengeType =
   | "pattern_recognition"
   | "proof_of_work"
   | "cryptographic_proof"
-  | "accessible_alternative";
+  | "accessible_alternative"
+  | "common_sense_choice";
 
 /** Public, client-safe representation of an issued challenge. Never includes
  * the expected answer or answer hash. */

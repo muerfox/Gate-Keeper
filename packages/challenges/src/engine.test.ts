@@ -15,6 +15,7 @@ const ALL_TYPES: ChallengeType[] = [
   "proof_of_work",
   "cryptographic_proof",
   "accessible_alternative",
+  "common_sense_choice",
 ];
 
 describe.each(ALL_TYPES)("challenge type: %s", (type) => {

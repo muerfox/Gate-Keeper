@@ -97,7 +97,7 @@ export const WIDGET_STYLES = `
   cursor: pointer;
   width: 100%;
 }
-.gk-option[aria-selected="true"] { border-color: var(--gk-accent); }
+.gk-option[aria-selected="true"], .gk-option[aria-pressed="true"] { border-color: var(--gk-accent); }
 .gk-status { font-size: 12px; color: var(--gk-muted); margin-top: 8px; min-height: 16px; }
 .gk-error { color: var(--gk-danger); }
 .gk-spinner {

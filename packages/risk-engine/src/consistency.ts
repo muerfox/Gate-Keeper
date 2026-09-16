@@ -28,6 +28,7 @@ export function analyzeInteractionConsistency(
   findings.push(...checkMonotonicTimestamps(events));
   findings.push(...checkMatchedPointerPairs(events));
   findings.push(...checkTimingJitter(events));
+  findings.push(...checkTeleportingPointer(events));
   findings.push(...checkPlausibleSolveTime(serverObservedSolveMs, minPlausibleSolveMs));
 
   return findings;
@@ -83,6 +84,43 @@ function checkTimingJitter(events: InteractionEvent[]): ConsistencyFinding[] {
     return [{ reason: "near_zero_pointer_timing_jitter", weight: 25 }];
   }
   return [];
+}
+
+/** A synthetic event dispatcher can set `clientX`/`clientY` to any value
+ * it likes with no intermediate samples — a real pointer, however fast,
+ * cannot cross a large on-screen distance between two adjacent samples
+ * with (near) zero elapsed time. The threshold here (50 px/ms, i.e.
+ * 50,000 px/sec) is set well above anything a physical mouse or trackpad
+ * can produce even during a fast flick, specifically so this only fires
+ * on movement that no pointing device could have generated — not on
+ * merely fast, real input. Small deltas are ignored outright since
+ * sub-pixel/rounding jitter at a tiny time delta isn't evidence of
+ * anything. */
+function checkTeleportingPointer(events: InteractionEvent[]): ConsistencyFinding[] {
+  const MIN_DISTANCE_PX = 30;
+  const MAX_PLAUSIBLE_PX_PER_MS = 50;
+
+  const moves = events.filter(
+    (e): e is InteractionEvent & { x: number; y: number } => e.type === "pointermove" && typeof e.x === "number" && typeof e.y === "number",
+  );
+  if (moves.length < 2) return [];
+
+  let worstRatio = 0;
+  for (let i = 1; i < moves.length; i++) {
+    const prev = moves[i - 1]!;
+    const curr = moves[i]!;
+    const distance = Math.hypot(curr.x - prev.x, curr.y - prev.y);
+    if (distance < MIN_DISTANCE_PX) continue;
+
+    const dt = curr.t - prev.t;
+    // dt <= 0 alongside a real distance means "moved before time elapsed"
+    // — treat as maximally implausible rather than dividing by zero.
+    const speed = dt <= 0 ? Number.POSITIVE_INFINITY : distance / dt;
+    worstRatio = Math.max(worstRatio, speed / MAX_PLAUSIBLE_PX_PER_MS);
+  }
+
+  if (worstRatio <= 1) return [];
+  return [{ reason: "pointer_teleport_implausible_speed", weight: Math.min(Math.round(20 * worstRatio), 45) }];
 }
 
 function checkPlausibleSolveTime(serverObservedSolveMs: number, minPlausibleSolveMs: number): ConsistencyFinding[] {

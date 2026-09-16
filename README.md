@@ -19,7 +19,7 @@ apps/
 
 packages/
   crypto/           Signed tokens/challenges, password hashing (no invented crypto)
-  challenges/       The dynamic, modular challenge engine (11 categories)
+  challenges/       The dynamic, modular challenge engine (12 categories)
   risk-engine/      Behavioral consistency analysis + risk scoring
   rate-limit/       Redis-backed rate limiting + atomic replay protection
   shared/           Zod schemas, shared types, Prisma schema

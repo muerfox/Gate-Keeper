@@ -20,7 +20,7 @@ this document is the detailed version.
 - Cryptographically signed, single-use, expiring challenges — same
   properties as online mode (random ID/nonce, site+action binding, server
   signature).
-- The same dynamic challenge engine (11 categories) and the same
+- The same dynamic challenge engine (12 categories) and the same
   behavioral-consistency risk scoring (Layer 3/4), run locally.
 - A `verifyToken()` call your own backend can use to enforce single-use
   tokens, the same way the hosted API's secret-key verify endpoint does.

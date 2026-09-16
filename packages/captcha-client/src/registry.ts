@@ -7,6 +7,7 @@ import { dragDropRenderer } from "./renderers/drag-drop.js";
 import { rotationRenderer } from "./renderers/rotation.js";
 import { dynamicInteractionRenderer } from "./renderers/dynamic-interaction.js";
 import { accessibleAlternativeRenderer } from "./renderers/accessible-alternative.js";
+import { commonSenseChoiceRenderer } from "./renderers/common-sense-choice.js";
 import { proofOfWorkRenderer, cryptographicProofRenderer } from "./renderers/computational.js";
 
 export const RENDERERS: Record<ChallengeType, ChallengeRenderer> = {
@@ -19,6 +20,7 @@ export const RENDERERS: Record<ChallengeType, ChallengeRenderer> = {
   rotation: rotationRenderer,
   dynamic_interaction: dynamicInteractionRenderer,
   accessible_alternative: accessibleAlternativeRenderer,
+  common_sense_choice: commonSenseChoiceRenderer,
   proof_of_work: proofOfWorkRenderer,
   cryptographic_proof: cryptographicProofRenderer,
 };

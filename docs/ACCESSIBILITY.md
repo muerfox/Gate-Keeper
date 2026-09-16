@@ -31,12 +31,18 @@ A challenge type is only added to the accessible pool
 
 Concretely, the accessible pool today is: `accessible_alternative` (a
 plain-language, keyboard/screen-reader-first question rendered as a
-native `<select>`), and the two computational types (`proof_of_work`,
+native `<select>`), `common_sense_choice` (a plain-language multiple
+choice question rendered as a row of buttons — Tab/Enter/Space, no
+custom widget), and the two computational types (`proof_of_work`,
 `cryptographic_proof`), which require **no interaction at all** — the
 browser computes a bounded background task and the visitor sees only a
 brief "Verifying…" status. When an accessible session's risk profile
 allows a computational challenge, that's the best possible outcome:
-zero interactive burden.
+zero interactive burden. Unlike `accessible_alternative`,
+`common_sense_choice` isn't reserved for the accessible pool only — it's
+also mixed into the general rotation for every session, since it's the
+easiest visual challenge on offer regardless of why a given session
+wants low friction.
 
 ## Requesting the accessible path
 

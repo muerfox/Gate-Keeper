@@ -54,6 +54,34 @@ describe("analyzeInteractionConsistency", () => {
     expect(findings.map((f) => f.reason)).toContain("near_zero_pointer_timing_jitter");
   });
 
+  it("flags a pointer covering an implausible distance with (near) zero elapsed time", () => {
+    const events: InteractionEvent[] = [
+      { t: 100, type: "pointermove", x: 0, y: 0 },
+      { t: 101, type: "pointermove", x: 5000, y: 5000 }, // ~7071px in 1ms
+    ];
+    const findings = analyzeInteractionConsistency(events, 2000, 900);
+    expect(findings.map((f) => f.reason)).toContain("pointer_teleport_implausible_speed");
+  });
+
+  it("does not flag a real, fast pointer movement", () => {
+    // A fast flick: ~200px in 20ms = 10 px/ms, well under the threshold.
+    const events: InteractionEvent[] = [
+      { t: 0, type: "pointermove", x: 0, y: 0 },
+      { t: 20, type: "pointermove", x: 200, y: 0 },
+    ];
+    const findings = analyzeInteractionConsistency(events, 2000, 900);
+    expect(findings.map((f) => f.reason)).not.toContain("pointer_teleport_implausible_speed");
+  });
+
+  it("ignores small pointer deltas regardless of timing", () => {
+    const events: InteractionEvent[] = [
+      { t: 0, type: "pointermove", x: 0, y: 0 },
+      { t: 0, type: "pointermove", x: 5, y: 5 }, // sub-threshold distance, same timestamp
+    ];
+    const findings = analyzeInteractionConsistency(events, 2000, 900);
+    expect(findings.map((f) => f.reason)).not.toContain("pointer_teleport_implausible_speed");
+  });
+
   it("flags a solve time faster than the challenge's plausible minimum", () => {
     const findings = analyzeInteractionConsistency([], 50, 900);
     expect(findings.map((f) => f.reason)).toContain("solve_time_below_plausible_minimum");
