@@ -19,7 +19,14 @@ loadRuntimeEnv();
 
 export const testEnv = {
   port: Number(process.env.PORT ?? 8000),
+  // Used by THIS server's own backendClient.verify() call — reachable
+  // from inside the Docker network (e.g. "http://api-test:8080").
   apiUrl: process.env.GATEKEEPER_API_URL ?? "http://localhost:8081",
+  // Used by the widget running in the VISITOR'S BROWSER, embedded
+  // straight into the HTML — must be a host-reachable URL (e.g.
+  // "http://127.0.0.1:8081"), not the Docker-internal hostname above,
+  // since the browser isn't on the Docker network and can't resolve it.
+  browserApiUrl: process.env.GATEKEEPER_BROWSER_API_URL ?? "http://localhost:8081",
   siteKey: process.env.GK_TEST_SITE_KEY,
   secretKey: process.env.GK_TEST_SECRET_KEY,
 };

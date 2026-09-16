@@ -98,7 +98,12 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://gatekeeper:${POSTGRES_PASSWORD:-gatekeeper_test_only}@postgres-test:5432/gatekeeper_test
+      # Used server-side (this container talks to api-test over the
+      # Docker network) — NOT reachable from the visitor's browser.
       GATEKEEPER_API_URL: http://api-test:8080
+      # Used by the widget in the visitor's browser — must be the
+      # host-mapped address, not the Docker-internal hostname above.
+      GATEKEEPER_BROWSER_API_URL: http://127.0.0.1:8081
       PORT: "8000"
     ports:
       - "127.0.0.1:8000:8000"

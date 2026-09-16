@@ -43,27 +43,32 @@ function page(): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Gate Keeper — test login</title>
 <style>
-  :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  body { max-width: 420px; margin: 60px auto; padding: 0 20px; }
-  h1 { font-size: 22px; margin-bottom: 4px; }
+  /* Deliberately a fixed light theme with every color set explicitly —
+     this is a small utility page, not worth a dark-mode variant, and an
+     ambient/inherited color here previously produced invisible
+     white-on-white text on one button. */
+  :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { max-width: 420px; margin: 60px auto; padding: 0 20px; background: #ffffff; color: #111827; }
+  h1 { font-size: 22px; margin-bottom: 4px; color: #111827; }
   .muted { color: #6b7280; font-size: 13px; margin-top: 0; }
-  .card { border: 1px solid #d1d5db; border-radius: 12px; padding: 24px; margin-top: 20px; }
-  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; margin-top: 14px; }
-  input { width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; box-sizing: border-box; }
+  .card { background: #ffffff; border: 1px solid #d1d5db; border-radius: 12px; padding: 24px; margin-top: 20px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; margin-top: 14px; color: #111827; }
+  input { width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; box-sizing: border-box; background: #ffffff; color: #111827; }
   button { border: none; border-radius: 8px; padding: 10px 16px; font-weight: 600; font-size: 14px; cursor: pointer; margin-top: 16px; }
-  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-primary { background: #2563eb; color: #ffffff; }
   .btn-primary:disabled { background: #93a5c9; cursor: not-allowed; }
-  .btn-secondary { background: #fff; border: 1px solid #d1d5db; margin-left: 8px; }
+  .btn-secondary { background: #ffffff; color: #111827; border: 1px solid #d1d5db; margin-left: 8px; }
   .result { font-family: ui-monospace, monospace; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; border-radius: 8px; padding: 12px; margin-top: 16px; }
-  .result.pending { background: #f3f4f6; }
+  .result.pending { background: #f3f4f6; color: #111827; }
   .result.pass { background: #dcfce7; color: #14532d; }
   .result.fail { background: #fee2e2; color: #7f1d1d; }
   .hint { font-size: 12px; color: #6b7280; }
+  .hint code, .muted code { color: #111827; }
 </style>
 </head>
 <body>
   <h1>Gate Keeper — test login</h1>
-  <p class="muted">This page verifies a real Gate Keeper deployment end to end: the widget below talks to the live API (${testEnv.apiUrl}), and this server independently re-verifies the resulting token before checking your credentials. Nothing here is mocked.</p>
+  <p class="muted">This page verifies a real Gate Keeper deployment end to end: the widget below talks to the live API (${testEnv.browserApiUrl}), and this server independently re-verifies the resulting token before checking your credentials. Nothing here is mocked.</p>
 
   <div class="card">
     <p class="hint">Demo credentials: <code>${TEST_USERNAME}</code> / <code>${TEST_PASSWORD}</code></p>
@@ -93,7 +98,7 @@ function page(): string {
 
     GateKeeper.render('#gatekeeper', {
       siteKey: ${JSON.stringify(testEnv.siteKey)},
-      apiUrl: ${JSON.stringify(testEnv.apiUrl)},
+      apiUrl: ${JSON.stringify(testEnv.browserApiUrl)},
       action: 'login',
       onSuccess(t) {
         token = t;
